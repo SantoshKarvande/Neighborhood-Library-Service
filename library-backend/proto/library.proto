@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package library.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ═══════════════════════════════════════════════════════════════
+// Enums
+// ═══════════════════════════════════════════════════════════════
+
+enum BookStatus {
+  BOOK_STATUS_UNSPECIFIED = 0;
+  BOOK_STATUS_AVAILABLE   = 1;
+  BOOK_STATUS_BORROWED    = 2;
+  BOOK_STATUS_RESERVED    = 3;
+  BOOK_STATUS_LOST        = 4;
+}
+
+enum TransactionStatus {
+  TRANSACTION_STATUS_UNSPECIFIED = 0;
+  TRANSACTION_STATUS_BORROWED    = 1;
+  TRANSACTION_STATUS_RETURNED    = 2;
+  TRANSACTION_STATUS_OVERDUE     = 3;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Core domain messages
+// ═══════════════════════════════════════════════════════════════
+
+message Author {
+  int64  author_id = 1;
+  string name      = 2;
+}
+
+message BookCopy {
+  int64      copy_id    = 1;
+  int64      book_id    = 2;
+  BookStatus status     = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message Book {
+  int64  book_id        = 1;
+  string title          = 2;
+  string isbn           = 3;
+  int32  published_year = 4;
+  repeated Author   authors = 5;
+  repeated BookCopy copies  = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message Member {
+  int64  member_id  = 1;
+  string name       = 2;
+  string email      = 3;
+  string phone      = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message Fine {
+  int64  fine_id        = 1;
+  int64  transaction_id = 2;
+  double amount         = 3;
+  bool   paid           = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message BorrowTransaction {
+  int64             transaction_id = 1;
+  int64             copy_id        = 2;
+  int64             member_id      = 3;
+  TransactionStatus status         = 4;
+  google.protobuf.Timestamp borrow_date = 5;
+  google.protobuf.Timestamp due_date    = 6;
+  google.protobuf.Timestamp return_date = 7;
+  repeated Fine fines       = 8;
+  string        book_title  = 9;
+  string        member_name = 10;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Request messages
+// ═══════════════════════════════════════════════════════════════
+
+message CreateAuthorRequest  { string name = 1; }
+message UpdateAuthorRequest  { int64 author_id = 1; string name = 2; }
+
+message CreateBookRequest {
+  string        title          = 1;
+  string        isbn           = 2;
+  int32         published_year = 3;
+  repeated int64 author_ids   = 4;
+  int32         copies_count   = 5;
+}
+message UpdateBookRequest {
+  int64          book_id        = 1;
+  string         title          = 2;
+  string         isbn           = 3;
+  int32          published_year = 4;
+  repeated int64 author_ids     = 5;
+}
+
+message CreateMemberRequest { string name = 1; string email = 2; string phone = 3; }
+message UpdateMemberRequest { int64 member_id = 1; string name = 2; string email = 3; string phone = 4; }
+
+message BorrowRequest {
+  int64 copy_id   = 1;
+  int64 member_id = 2;
+  google.protobuf.Timestamp due_date = 3;
+}
+message ReturnRequest  { int64 transaction_id = 1; double fine_per_day = 2; }
+message PayFinesRequest { repeated int64 fine_ids = 1; }
+
+// ═══════════════════════════════════════════════════════════════
+// Response messages
+// ═══════════════════════════════════════════════════════════════
+
+message AuthorResponse       { Author   author   = 1; }
+message BookResponse         { Book     book     = 1; }
+message MemberResponse       { Member   member   = 1; }
+message BookCopyResponse     { BookCopy copy     = 1; }
+message TransactionResponse  { BorrowTransaction transaction = 1; }
+
+message AuthorListResponse       { int32 total = 1; repeated Author             authors      = 2; }
+message BookListResponse         { int32 total = 1; repeated Book               books        = 2; }
+message MemberListResponse       { int32 total = 1; repeated Member             members      = 2; }
+message CopyListResponse         {                  repeated BookCopy           copies       = 1; }
+message FineListResponse         {                  repeated Fine               fines        = 1; }
+message TransactionListResponse  { int32 total = 1; repeated BorrowTransaction  transactions = 2; }
+
+message MarkOverdueResponse { int32 updated_count = 1; }
+message ErrorResponse {
+  int32 status_code = 1;
+  string error = 2;
+  string detail = 3;
+}
+
+message LibraryStats {
+  int32  total_books        = 1;
+  int32  total_copies       = 2;
+  int32  available_copies   = 3;
+  int32  total_members      = 4;
+  int32  active_loans       = 5;
+  int32  overdue_loans      = 6;
+  double total_fines_unpaid = 7;
+}

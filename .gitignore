@@ -1,0 +1,122 @@
+# ──────────────────────────────────────────────
+# ROOT .gitignore — Library Management System
+# ──────────────────────────────────────────────
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Backup / temporary files (project-specific)
+*.bk
+*.bk1
+*.bk2
+*.updated
+*.orig
+*.tmp
+
+# Secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ──────────────────────────────────────────────
+# PYTHON / BACKEND
+# ──────────────────────────────────────────────
+
+# Virtual environments
+library-backend/.venv/
+library-backend/.venv_old/
+library-backend/venv/
+library-backend/env/
+library-backend/.env/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution / packaging
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.eggs/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# mypy / type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+
+# ──────────────────────────────────────────────
+# NODE / FRONTEND
+# ──────────────────────────────────────────────
+
+# Dependencies
+library-frontend/node_modules/
+
+# Next.js build output
+library-frontend/.next/
+library-frontend/out/
+
+# Vercel
+.vercel
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# ESLint cache
+.eslintcache
+
+# Vitest / jest coverage
+library-frontend/coverage/
+
+# ──────────────────────────────────────────────
+# DOCKER
+# ──────────────────────────────────────────────
+
+# Docker volumes (if mapped locally)
+pgdata/
+postgres-data/
+
+# ──────────────────────────────────────────────
+# MISC
+# ──────────────────────────────────────────────
+file_list.txt
+*.bak

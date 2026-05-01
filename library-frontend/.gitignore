@@ -1,0 +1,30 @@
+# ──────────────────────────────────────────────
+# library-frontend/.gitignore
+# ──────────────────────────────────────────────
+
+# Secrets
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Vercel
+.vercel
+
+# TypeScript build cache
+*.tsbuildinfo
+next-env.d.ts
+
+# ESLint cache
+.eslintcache
+
+# Vitest / jest coverage
+coverage/
+
+# OS
+.DS_Store
