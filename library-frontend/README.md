@@ -1,122 +1,213 @@
-# Library Frontend
+# 📚 Neighborhood Library Service — Frontend
 
-Next.js frontend for the Library backend REST API.
+**Next.js 14 (TypeScript)** frontend for the Neighborhood Library Service. Communicates with the FastAPI backend over both **JSON** and **Protocol Buffers (Protobuf)** using the App Router architecture.
 
-The UI accepts clear text values in forms and displays decoded clear text output. API traffic uses protobuf where the backend protobuf schema supports it:
+---
 
-- Request header: `Content-Type: application/x-protobuf`
-- Response header: `Accept: application/x-protobuf`
-- Schema: `public/proto/library.proto`
+## 🧰 Tech Stack
 
-## Dependencies
+| Technology | Purpose |
+|---|---|
+| Next.js 14 | React framework (App Router) |
+| TypeScript | Type safety |
+| protobufjs | Runtime Protobuf encode/decode |
+| lucide-react | Icon library |
+| Vitest | Unit testing |
+| Docker | Containerisation |
 
-- Node.js 20 or newer
-- npm 10 or newer
-- Running backend API at `http://localhost:8000`
+---
 
-Runtime packages:
+## 🗂️ Project Structure
 
-- `next`
-- `react`
-- `react-dom`
-- `protobufjs`
-- `lucide-react`
-
-Test packages:
-
-- `vitest`
-- `jsdom`
-- `@testing-library/react`
-- `@testing-library/jest-dom`
-- `@vitejs/plugin-react`
-
-## Configure
-
-From the frontend directory:
-
-```bash
-cd /Volumes/SSK/InterView_Knowledge/Library1/library_frontend
-cp .env.example .env.local
+```
+library-frontend/
+├── app/
+│   ├── globals.css              ← Global styles
+│   ├── layout.tsx               ← Root layout component
+│   └── page.tsx                 ← Home page
+├── lib/
+│   ├── api.ts                   ← API fetch wrappers (JSON + Protobuf)
+│   └── protobuf.ts              ← Protobuf encode/decode helpers
+├── public/
+│   └── proto/
+│       ├── library.proto        ← Protobuf schema (loaded at runtime)
+│       └── google/protobuf/
+│           └── timestamp.proto  ← Google well-known type
+├── tests/
+│   ├── protobuf-client.test.ts  ← Vitest tests for Protobuf client
+│   └── setup.ts                 ← Vitest setup
+├── Dockerfile                   ← Multi-stage production image
+├── .dockerignore
+├── .env.example
+├── .eslintrc.json
+├── next.config.mjs
+├── package.json
+├── tsconfig.json
+└── vitest.config.ts
 ```
 
-Default `.env.local`:
+---
+
+## ✅ Prerequisites (Local Development)
+
+| Tool | Version |
+|---|---|
+| Node.js | 18+ |
+| npm | 9+ |
+| Docker Desktop | Latest (for Docker workflow) |
+
+> To run via Docker only, Docker Desktop is the sole requirement.
+
+---
+
+## 🐳 Run with Docker (Recommended)
+
+Use the **root-level** `docker-compose.yml` to start the full stack (DB + backend + frontend) together:
 
 ```bash
-NEXT_PUBLIC_LIBRARY_API_BASE_URL=http://localhost:8000/api/v1
+# From the project root — Neighborhood-Library-Service/
+docker-compose up --build
 ```
 
-## Install
+Frontend will be available at: **http://localhost:3000**
+
+> The frontend container depends on the backend being healthy before it starts. Docker Compose handles this automatically.
+
+---
+
+## 🛠️ Local Development Setup
+
+### 1. Install dependencies
 
 ```bash
+cd library-frontend
 npm install
 ```
 
-## Run Backend
+> This also generates `package-lock.json` if it doesn't exist. Commit this file to git.
 
-In another terminal, start the backend from the backend directory:
-
-```bash
-cd /Volumes/SSK/InterView_Knowledge/Library1/library-backend
-source .venv/bin/activate
-export DATABASE_URL=postgresql+asyncpg://library_user:library_pass@localhost:5432/library_db
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Open backend docs:
-
-```text
-http://localhost:8000/docs
-```
-
-## Run Frontend
+### 2. Configure environment variables
 
 ```bash
-cd /Volumes/SSK/InterView_Knowledge/Library1/library_frontend
+cp .env.example .env.local
+```
+
+Update `.env.local`:
+
+```env
+# Point to the running backend
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+> When running inside Docker Compose, the frontend container uses `http://backend:8000` internally. For local development outside Docker, use `http://localhost:8000`.
+
+### 3. Start the development server
+
+```bash
 npm run dev
 ```
 
-Open:
+Frontend available at: **http://localhost:3000**
 
-```text
-http://localhost:3000
-```
+---
 
-## Compile Production Build
+## 🏗️ Build for Production
 
 ```bash
+# Create optimised production build
 npm run build
+
+# Serve the production build
 npm run start
 ```
 
-Production start defaults to:
+---
 
-```text
-http://localhost:3000
+## 🔄 Protocol Buffers
+
+The frontend loads the Protobuf schema at **runtime** from `public/proto/library.proto` using `protobufjs`. No compile step is needed on the frontend.
+
+The helper functions are in `lib/protobuf.ts`:
+- Encode a JS object → Protobuf binary before sending to the API
+- Decode Protobuf binary → JS object when receiving from the API
+
+> Keep `public/proto/library.proto` in sync with `library-backend/proto/library.proto`.
+
+---
+
+## 🔌 API Communication
+
+`lib/api.ts` provides fetch wrappers that support both encodings:
+
+**JSON (default):**
+```typescript
+// No special headers required
+const response = await fetch(`${API_URL}/api/v1/books`);
 ```
 
-## Automated Tests
+**Protobuf:**
+```typescript
+// Set both headers to use Protobuf
+fetch(`${API_URL}/api/v1/books`, {
+  headers: {
+    'Content-Type': 'application/x-protobuf',
+    'Accept':       'application/x-protobuf',
+  }
+});
+```
+
+---
+
+## 🧪 Running Tests
 
 ```bash
-npm test
+# Run all tests once
+npm run test
+
+# Run in watch mode
+npm run test:watch
 ```
 
-The tests validate:
+Tests are located in the `tests/` directory and configured via `vitest.config.ts`.
 
-- protobuf encoding and decoding
-- URL/query construction from clear text form values
-- protobuf request headers and binary request body
-- borrow date conversion into `google.protobuf.Timestamp`
+---
 
-## API Coverage
+## 🔧 Available Scripts
 
-The UI exposes:
+| Script | Command | Description |
+|---|---|---|
+| Dev server | `npm run dev` | Start with hot reload at http://localhost:3000 |
+| Production build | `npm run build` | Optimised build in `.next/` |
+| Production server | `npm run start` | Serve the production build |
+| Lint | `npm run lint` | Run ESLint |
+| Test | `npm run test` | Run Vitest once |
+| Test watch | `npm run test:watch` | Run Vitest in watch mode |
 
-- Authors: list, get, create, update, delete
-- Books: list, get, create, update, delete
-- Book copies: list, add copies
-- Members: list, get, create, update, delete
-- Loans: list, get, borrow, return, borrowed books, due books, mark overdue
-- Fines: transaction fines, member fines, pay fines
-- Stats: library stats
+---
 
-One backend schema gap is shown in the UI: `PATCH /books/copies/{copy_id}/status` requires a body, but `library.proto` does not currently define a protobuf request message for that body. Add a protobuf request message and backend serializer mapping to make that endpoint protobuf-only like the others.
+## 🌍 Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | Backend API base URL | `http://localhost:8000` |
+
+> `NEXT_PUBLIC_` prefix makes the variable available in the browser bundle. It is baked in at **build time**, so the correct URL must be set before running `npm run build` or `docker-compose up --build`.
+
+---
+
+## 🐳 Docker Reference
+
+The frontend Dockerfile uses a **multi-stage build**:
+- `deps` — installs `node_modules`
+- `builder` — runs `npm run build`
+- `runtime` — minimal final image with only the built output
+
+```bash
+# Build image standalone
+docker build -t library-frontend ./library-frontend
+
+# Run standalone (backend must be reachable)
+docker run -p 3000:3000 \
+  -e NEXT_PUBLIC_API_URL=http://localhost:8000 \
+  library-frontend
+```

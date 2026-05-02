@@ -1,210 +1,204 @@
-# Neighborhood Library Service – Backend
+# 📚 Neighborhood Library Service — Backend
 
-A production-quality **Python / FastAPI** REST backend for the neighborhood library, backed by **PostgreSQL** and described by a **Protocol Buffers** interface definition.
-
----
-
-## Table of Contents
-
-1. [Project Structure](#project-structure)
-2. [Database Schema](#database-schema)
-3. [Quick Start (Docker Compose)](#quick-start-docker-compose)
-4. [Local Development Setup](#local-development-setup)
-5. [Running Database Migrations](#running-database-migrations)
-6. [Running the Server](#running-the-server)
-7. [Seeding Demo Data](#seeding-demo-data)
-8. [Compiling the Proto File](#compiling-the-proto-file)
-9. [API Reference](#api-reference)
-10. [Running Tests](#running-tests)
-11. [Sample Client](#sample-client)
-12. [Environment Variables](#environment-variables)
+Python **FastAPI** backend for the Neighborhood Library Service. Exposes a REST API supporting both **JSON** and **Protocol Buffers (Protobuf)** encoding, backed by a **PostgreSQL** database managed via **Alembic** migrations.
 
 ---
 
-## Project Structure
+## 🧰 Tech Stack
+
+| Technology | Purpose |
+|---|---|
+| Python 3.13 | Runtime |
+| FastAPI | Web framework |
+| Uvicorn + uvloop | ASGI server |
+| SQLAlchemy 2.x (async) | ORM |
+| asyncpg | Async PostgreSQL driver |
+| Alembic | Database migrations |
+| Pydantic v2 | Request/response validation |
+| protobuf + grpcio-tools | Protocol Buffers support |
+| pytest + httpx | Testing |
+| Docker + Docker Compose | Containerisation |
+
+---
+
+## 🗂️ Project Structure
 
 ```
 library-backend/
 ├── app/
-│   ├── main.py                  # FastAPI app & lifespan
+│   ├── api/                     ← Route handlers
+│   │   ├── authors.py
+│   │   ├── books.py
+│   │   ├── loans.py
+│   │   └── members.py
 │   ├── core/
-│   │   └── database.py          # Async SQLAlchemy engine + session
+│   │   └── database.py          ← SQLAlchemy async engine & session
+│   ├── middleware/
+│   │   └── protobuf.py          ← Protobuf request/response middleware
 │   ├── models/
-│   │   └── models.py            # ORM models (mirrors db_schema.sql exactly)
+│   │   └── models.py            ← SQLAlchemy ORM models
+│   ├── proto_gen/
+│   │   ├── library_pb2.py       ← Auto-generated Protobuf Python classes
+│   │   ├── library_pb2.pyi      ← Type stubs
+│   │   └── serializer.py        ← Protobuf ↔ dict serializers
 │   ├── schemas/
-│   │   └── schemas.py           # Pydantic v2 request / response shapes
+│   │   └── schemas.py           ← Pydantic schemas
 │   ├── services/
-│   │   ├── authors_service.py   # Author business logic
-│   │   ├── books_service.py     # Book + copy business logic
-│   │   ├── members_service.py   # Member business logic
-│   │   └── loans_service.py     # Borrow / return / fines / stats
-│   └── api/
-│       ├── authors.py           # /api/v1/authors
-│       ├── books.py             # /api/v1/books
-│       ├── members.py           # /api/v1/members
-│       └── loans.py             # /api/v1/loans
-│
-├── migrations/
-│   ├── env.py                   # Alembic async env
-│   ├── script.py.mako
-│   └── versions/
-│       └── 0001_initial.py      # Full schema migration
-│
+│   │   ├── authors_service.py
+│   │   ├── books_service.py
+│   │   ├── loans_service.py
+│   │   └── members_service.py
+│   └── main.py                  ← FastAPI app entry point
+├── migrations/                  ← Alembic migrations
+│   ├── versions/
+│   │   └── 0001_initial.py      ← Initial schema (tables + ENUMs)
+│   ├── env.py                   ← Alembic async environment
+│   └── script.py.mako
 ├── proto/
-│   └── library.proto            # Protobuf service + message definitions
-│
+│   └── library.proto            ← Protobuf schema definition
 ├── scripts/
-│   ├── init_db.sql              # Enum creation (runs at container first start)
-│   ├── seed.py                  # Demo data seeder
-│   ├── compile_proto.sh         # Generates Python gRPC stubs
-│   └── sample_client.py        # Exercises every endpoint via httpx
-│
+│   ├── init_db.sql              ← Drops/recreates DB + user + grants
+│   ├── compile_proto.sh         ← Regenerates proto_gen/ from .proto
+│   ├── seed.py                  ← Seeds sample data
+│   ├── sample_client.py         ← CLI JSON test client
+│   └── proto_client.py          ← CLI Protobuf test client
 ├── tests/
-│   └── test_api.py              # Async pytest integration tests
-│
-├── Dockerfile
-├── docker-compose.yml
+│   └── test_api.py
+├── Dockerfile                   ← Multi-stage production image
+├── .dockerignore
+├── .env.example
 ├── alembic.ini
-├── requirements.txt
 ├── pytest.ini
-└── .env.example
+└── requirements.txt
 ```
 
 ---
 
-## Database Schema
+## ✅ Prerequisites (Local Development)
 
-The schema is implemented exactly as `db_schema.sql` specifies:
-
-| Table | Purpose |
+| Tool | Version |
 |---|---|
-| `authors` | Author master data |
-| `books` | Book metadata (title, ISBN, year) |
-| `book_authors` | Many-to-many book ↔ author mapping |
-| `book_copies` | Individual physical copies with `book_status` enum |
-| `members` | Library members |
-| `borrow_transactions` | Each borrow/return event with `transaction_status` enum |
-| `fines` | Fines attached to overdue transactions |
+| Python | 3.13+ |
+| Docker Desktop | Latest |
+| protoc | 3.x (only if modifying .proto files) |
 
-**Enums**
-
-| Enum | Values |
-|---|---|
-| `book_status` | `AVAILABLE`, `BORROWED`, `RESERVED`, `LOST` |
-| `transaction_status` | `BORROWED`, `RETURNED`, `OVERDUE` |
+> To run via Docker only, Docker Desktop is the sole requirement.
 
 ---
 
-## Quick Start (Docker Compose)
+## 🐳 Run with Docker (Recommended)
 
-> **Prerequisites**: Docker ≥ 24 and Docker Compose v2
+Use the **root-level** `docker-compose.yml` from the project root to start the entire stack (DB + migrations + backend + frontend) together:
 
 ```bash
-# 1. Clone / enter the directory
+# From the project root — Neighborhood-Library-Service/
+docker-compose up --build
+```
+
+To run the backend service alone with its own database:
+
+```bash
 cd library-backend
-
-# 2. Copy environment file
-cp .env.example .env
-
-# 3. Build and start everything
-#    (Postgres → migrations → API, in order)
-docker compose up --build
-
-# API is now live at http://localhost:8000
-# Interactive docs: http://localhost:8000/docs
+docker-compose up --build
 ```
 
-To stop:
-```bash
-docker compose down          # keep data
-docker compose down -v       # also delete the postgres volume
-```
+**Services started:**
+
+| Service | URL |
+|---|---|
+| Backend API | http://localhost:8000 |
+| Swagger UI | http://localhost:8000/docs |
+| ReDoc | http://localhost:8000/redoc |
+| Health check | http://localhost:8000/health |
+| Proto schema | http://localhost:8000/proto-schema |
 
 ---
 
-## Local Development Setup
+## 🛠️ Local Development Setup
 
-### Prerequisites
-
-- Python 3.12+
-- PostgreSQL 14+ running locally (or via Docker)
-
-### Step 1 – Create a virtual environment
+### 1. Start PostgreSQL
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+cd library-backend
+docker-compose up -d db
 ```
 
-### Step 2 – Install dependencies
+### 2. Create and activate a virtual environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # macOS / Linux
+# .venv\Scripts\activate         # Windows
+```
+
+### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Step 3 – Start Postgres (Docker, quickest)
-
-```bash
-docker run -d \
-  --name library_db \
-  -e POSTGRES_USER=library_user \
-  -e POSTGRES_PASSWORD=library_pass \
-  -e POSTGRES_DB=library_db \
-  -p 5432:5432 \
-  postgres:16-alpine
-```
-
-### Step 4 – Create the custom enums
-
-```bash
-psql postgresql://library_user:library_pass@localhost:5432/library_db \
-     -f scripts/init_db.sql
-```
-
-### Step 5 – Set environment variable
+### 4. Configure environment variables
 
 ```bash
 cp .env.example .env
-# .env already contains the right localhost URL; edit if your Postgres differs
-export DATABASE_URL=postgresql+asyncpg://library_user:library_pass@localhost:5432/library_db
+```
+
+Update `.env`:
+
+```env
+# For local development (outside Docker)
+DATABASE_URL=postgresql+asyncpg://library_user:library_pass@localhost:5432/library_db
+```
+
+### 5. Run database migrations
+
+```bash
+alembic upgrade head
+```
+
+### 6. Start the development server
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
 
-## Running Database Migrations
+## 🗄️ Database
+
+### Credentials
+
+| Setting | Value |
+|---|---|
+| Database | `library_db` |
+| User | `library_user` |
+| Password | `library_pass` |
+| Port | `5432` |
+
+The database is initialised by `scripts/init_db.sql` which runs automatically on first container start. It:
+- Drops and recreates `library_db` and `library_user` on every fresh volume start
+- Grants full `READ / WRITE / EXECUTE` permissions on all tables, sequences, and functions to `library_user`
+
+### Migration commands
 
 ```bash
 # Apply all pending migrations
 alembic upgrade head
 
-# Rollback the last migration
+# Create a new migration after model changes
+alembic revision --autogenerate -m "describe your change"
+
+# Rollback one step
 alembic downgrade -1
 
-# Auto-generate a new migration after model changes
-alembic revision --autogenerate -m "add xyz column"
+# Check current state
+alembic current
+
+# View history
+alembic history
 ```
 
----
-
-## Running the Server
-
-```bash
-# Development (live reload)
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Production
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
-Open in browser:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
----
-
-## Seeding Demo Data
-
-Creates 4 authors, 5 books (with copies), 3 members, and one overdue loan with a fine:
+### Seed sample data
 
 ```bash
 python scripts/seed.py
@@ -212,118 +206,83 @@ python scripts/seed.py
 
 ---
 
-## Compiling the Proto File
+## 🔌 API Endpoints
 
-The Protobuf file (`proto/library.proto`) defines the full service interface.
-To generate Python stubs (useful for gRPC clients or code generation):
+All endpoints support **JSON** (default) and **Protocol Buffers**.
+
+To use Protobuf encoding, set request headers:
+```
+Content-Type: application/x-protobuf
+Accept:       application/x-protobuf
+```
+
+| Resource | Base Path | Operations |
+|---|---|---|
+| Authors | `/api/v1/authors` | GET, POST, GET /{id}, PUT /{id}, DELETE /{id} |
+| Books | `/api/v1/books` | GET, POST, GET /{id}, PUT /{id}, DELETE /{id} |
+| Members | `/api/v1/members` | GET, POST, GET /{id}, PUT /{id}, DELETE /{id} |
+| Loans | `/api/v1/loans` | GET, POST, GET /{id}, PUT /{id}, DELETE /{id} |
+
+Full interactive docs: **http://localhost:8000/docs**
+
+---
+
+## 🔄 Protocol Buffers
+
+The schema is defined in `proto/library.proto`.
+
+If you modify the `.proto` file, regenerate the Python stubs:
 
 ```bash
-# Make the script executable once
 chmod +x scripts/compile_proto.sh
-
-# Generate stubs into app/proto_gen/
 ./scripts/compile_proto.sh
 ```
 
-The generated files (`library_pb2.py` and `library_pb2_grpc.py`) can be used
-to build a gRPC gateway on top of the REST service or to auto-generate client SDKs.
+This regenerates `app/proto_gen/library_pb2.py` and `library_pb2.pyi`.
+
+> Keep `proto/library.proto` in sync with `library-frontend/public/proto/library.proto`.
 
 ---
 
-## API Reference
-
-All routes are under `/api/v1`. Interactive documentation at `/docs`.
-
-### Authors  `GET/POST/PATCH/DELETE /api/v1/authors`
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/authors` | List authors (with optional `?search=`) |
-| GET | `/authors/{id}` | Get one author |
-| POST | `/authors` | Create author |
-| PATCH | `/authors/{id}` | Update author name |
-| DELETE | `/authors/{id}` | Delete author |
-
-### Books  `GET/POST/PATCH/DELETE /api/v1/books`
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/books` | List books (`?search=`, `?author_id=`, `?available_only=true`) |
-| GET | `/books/{id}` | Full book detail with authors & copies |
-| POST | `/books` | Add book + create copies + link authors |
-| PATCH | `/books/{id}` | Update metadata / replace author list |
-| DELETE | `/books/{id}` | Delete book (blocked if copies borrowed) |
-| GET | `/books/{id}/copies` | List copies (`?status=AVAILABLE`) |
-| POST | `/books/{id}/copies` | Add N more copies |
-| PATCH | `/books/copies/{copy_id}/status` | Manually set copy status (e.g. LOST) |
-
-### Members  `GET/POST/PATCH/DELETE /api/v1/members`
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/members` | List members (`?search=`) |
-| GET | `/members/{id}` | Get one member |
-| POST | `/members` | Register member |
-| PATCH | `/members/{id}` | Update member profile |
-| DELETE | `/members/{id}` | Delete member (blocked if active loans) |
-
-### Loans  `/api/v1/loans`
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/loans` | **Borrow** a book copy |
-| POST | `/loans/{id}/return` | **Return** a book (auto-calculates fine) |
-| GET | `/loans` | Full history (`?member_id=`, `?book_id=`, `?status=`, `?overdue_only=true`) |
-| GET | `/loans/{id}` | Get single transaction |
-| GET | `/loans/borrowed` | All active (unreturned) loans (`?member_id=`) |
-| GET | `/loans/due` | All overdue loans |
-| GET | `/loans/{id}/fines` | Fines on a specific transaction |
-| GET | `/loans/members/{member_id}/fines` | All fines for a member (`?unpaid_only=true`) |
-| POST | `/loans/fines/pay` | Mark fines as paid |
-| POST | `/loans/mark-overdue` | Admin: batch-transition BORROWED→OVERDUE |
-| GET | `/loans/stats` | Dashboard statistics |
-
----
-
-## Running Tests
+## 🧪 Running Tests
 
 ```bash
-# Make sure Postgres is running and migrations are applied, then:
-pytest tests/test_api.py -v
+source .venv/bin/activate
 
-# With coverage
-pip install pytest-cov
-pytest tests/ --cov=app --cov-report=term-missing
+pytest                     # all tests
+pytest -v                  # verbose
+pytest tests/test_api.py   # specific file
 ```
 
 ---
 
-## Sample Client
+## 🌍 Environment Variables
 
-Run the sample script to exercise every endpoint against a live server:
+| Variable | Description | Default |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL async connection string | `postgresql+asyncpg://library_user:library_pass@db:5432/library_db` |
+| `SQL_ECHO` | Set to `1` to log all SQL queries | `` (disabled) |
+
+> Inside Docker Compose, use `@db:5432` as the host. For local development outside Docker, use `@localhost:5432`.
+
+---
+
+## 🐳 Docker Reference
 
 ```bash
-# Server must be running on localhost:8000
-python scripts/sample_client.py
+# Build and start
+docker-compose up --build
+
+# Start in background
+docker-compose up -d
+
+# Stop services
+docker-compose down
+
+# Full reset — wipe DB volume and restart clean
+docker-compose down -v --remove-orphans
+docker-compose up --build
+
+# View logs
+docker-compose logs -f
 ```
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `postgresql+asyncpg://library_user:library_pass@localhost:5432/library_db` | Full async DB connection URL |
-| `SQL_ECHO` | `` (empty) | Set to `1` to log all SQL statements |
-
----
-
-## Business Rules
-
-- A copy must be `AVAILABLE` to be borrowed. Attempting to borrow a `BORROWED`, `RESERVED`, or `LOST` copy returns **409 Conflict**.
-- Returning a copy automatically computes a fine if `return_date > due_date` using `fine_per_day` (default $0.50).
-- Deleting a book is blocked while any of its copies are `BORROWED`.
-- Deleting a member is blocked while they have active (unreturned) loans.
-- The `POST /loans/mark-overdue` endpoint transitions all `BORROWED` transactions past their due date to `OVERDUE` — intended to be called by a scheduler/cron job.
-
-
