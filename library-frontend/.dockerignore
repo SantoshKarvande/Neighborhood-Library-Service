@@ -1,0 +1,51 @@
+# =============================================================================
+# library-frontend/.dockerignore
+# =============================================================================
+
+# Node modules — reinstalled fresh inside the image
+node_modules/
+
+# Next.js build output — rebuilt inside the image
+.next/
+out/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# ESLint cache
+.eslintcache
+
+# Vitest / jest coverage
+coverage/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# macOS
+.DS_Store
+
+# Docker files
+Dockerfile
+.dockerignore
+
+# Docs
+README.md
+
+# Tests (not needed at runtime)
+tests/
+
+# Vercel
+.vercel

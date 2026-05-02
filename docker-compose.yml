@@ -1,0 +1,111 @@
+# version: "3.9"
+
+# =============================================================================
+# Neighborhood Library Service — Root docker-compose.yml
+#
+# Services:
+#   db        — PostgreSQL 16 (superuser initialises library_db + library_user)
+#   migrate   — Alembic one-shot migration runner
+#   backend   — FastAPI / Uvicorn  → http://localhost:8000
+#   frontend  — Next.js            → http://localhost:3000
+#
+# Quick start:
+#   docker-compose up --build
+#
+# Full reset (wipe DB volume and restart clean):
+#   docker-compose down -v && docker-compose up --build
+# =============================================================================
+
+services:
+
+  # ─── PostgreSQL 16 ───────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: library_db
+    environment:
+      # Superuser — needed to DROP/CREATE library_db and library_user in init_db.sql
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB:       postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # init_db.sql runs automatically when pg_data volume is empty (fresh start).
+      # To force a re-run: docker-compose down -v
+      - ./library-backend/scripts/init_db.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U library_user -d library_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - library_net
+
+  # ─── Alembic migrations (one-shot) ───────────────────────────────────────────
+  migrate:
+    build:
+      context: ./library-backend
+      dockerfile: Dockerfile
+    container_name: library_migrate
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+asyncpg://library_user:library_pass@db:5432/library_db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - library_net
+
+  # ─── FastAPI backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./library-backend
+      dockerfile: Dockerfile
+    container_name: library_backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql+asyncpg://library_user:library_pass@db:5432/library_db
+      SQL_ECHO:     ""          # set to "1" to enable SQLAlchemy query logging
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./library-backend:/app  # live-reload: mounts source into container
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - library_net
+
+  # ─── Next.js frontend ─────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./library-frontend
+      dockerfile: Dockerfile
+    container_name: library_frontend
+    environment:
+      # Must use the container service name "backend", not "localhost"
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - library_net
+
+# ─── Shared network ───────────────────────────────────────────────────────────
+networks:
+  library_net:
+    driver: bridge
+
+# ─── Named volumes ────────────────────────────────────────────────────────────
+volumes:
+  pg_data:

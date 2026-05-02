@@ -1,0 +1,59 @@
+# =============================================================================
+# library-backend/.dockerignore
+# =============================================================================
+
+# Python virtual environments — never copy into image
+.venv/
+.venv_old/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Secrets — must never be baked into an image
+.env
+.env.*
+!.env.example
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Backup / temp files
+*.bk
+*.bk1
+*.bk2
+*.updated
+*.orig
+*.tmp
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# macOS
+.DS_Store
+
+# Docker files (no need to copy into image)
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Docs
+README.md
+
+# Tests (not needed at runtime — remove this if you run tests inside container)
+tests/

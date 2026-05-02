@@ -6,7 +6,9 @@ Create Date: 2025-01-01 00:00:00
 """
 
 from typing import Sequence, Union
+
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "0001_initial"
@@ -14,23 +16,31 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# ── Define ENUMs once, reuse everywhere ───────────────────────────────────────
+# create_type=False → Alembic will NOT auto-issue CREATE TYPE.
+# We create them explicitly below using .create(checkfirst=True),
+# which is safe whether or not init_db.sql already ran them.
+book_status_enum = postgresql.ENUM(
+    "AVAILABLE", "BORROWED", "RESERVED", "LOST",
+    name="book_status",
+    create_type=False,
+)
+
+transaction_status_enum = postgresql.ENUM(
+    "BORROWED", "RETURNED", "OVERDUE",
+    name="transaction_status",
+    create_type=False,
+)
+
 
 def upgrade() -> None:
-    # ── Enums ──────────────────────────────────────────────────────────────────
-    # Use DO blocks so migration is idempotent regardless of whether
-    # init_db.sql was already run (avoids DuplicateObjectError).
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE if not exists book_status AS ENUM ('AVAILABLE','BORROWED','RESERVED','LOST');
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE if not exists transaction_status AS ENUM ('BORROWED','RETURNED','OVERDUE');
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$;
-    """)
+    bind = op.get_bind()
+
+    # ── Create ENUMs only if they don't already exist ─────────────────────────
+    # checkfirst=True makes this fully idempotent — safe whether init_db.sql
+    # ran or not, and safe on repeated migration attempts.
+    book_status_enum.create(bind, checkfirst=True)
+    transaction_status_enum.create(bind, checkfirst=True)
 
     # ── authors ────────────────────────────────────────────────────────────────
     op.create_table(
@@ -53,7 +63,7 @@ def upgrade() -> None:
     op.create_table(
         "book_authors",
         sa.Column("book_id",   sa.BigInteger(),
-                  sa.ForeignKey("books.book_id",   ondelete="CASCADE"), primary_key=True),
+                  sa.ForeignKey("books.book_id",     ondelete="CASCADE"), primary_key=True),
         sa.Column("author_id", sa.BigInteger(),
                   sa.ForeignKey("authors.author_id", ondelete="CASCADE"), primary_key=True),
     )
@@ -64,8 +74,7 @@ def upgrade() -> None:
         sa.Column("copy_id",    sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("book_id",    sa.BigInteger(),
                   sa.ForeignKey("books.book_id", ondelete="CASCADE"), nullable=False),
-        sa.Column("status",     sa.Enum("AVAILABLE", "BORROWED", "RESERVED", "LOST",
-                                        name="book_status", create_type=False),
+        sa.Column("status",     book_status_enum,
                   nullable=False, server_default="AVAILABLE"),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now()),
     )
@@ -85,14 +94,13 @@ def upgrade() -> None:
         "borrow_transactions",
         sa.Column("transaction_id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("copy_id",        sa.BigInteger(),
-                  sa.ForeignKey("book_copies.copy_id"), nullable=False),
+                  sa.ForeignKey("book_copies.copy_id"),  nullable=False),
         sa.Column("member_id",      sa.BigInteger(),
-                  sa.ForeignKey("members.member_id"), nullable=False),
-        sa.Column("borrow_date",    sa.DateTime(),   server_default=sa.func.now()),
-        sa.Column("due_date",       sa.DateTime(),   nullable=False),
-        sa.Column("return_date",    sa.DateTime(),   nullable=True),
-        sa.Column("status",         sa.Enum("BORROWED", "RETURNED", "OVERDUE",
-                                            name="transaction_status", create_type=False),
+                  sa.ForeignKey("members.member_id"),    nullable=False),
+        sa.Column("borrow_date",    sa.DateTime(),       server_default=sa.func.now()),
+        sa.Column("due_date",       sa.DateTime(),       nullable=False),
+        sa.Column("return_date",    sa.DateTime(),       nullable=True),
+        sa.Column("status",         transaction_status_enum,
                   nullable=False, server_default="BORROWED"),
         sa.CheckConstraint(
             "return_date IS NULL OR return_date >= borrow_date",
@@ -111,15 +119,15 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(),     server_default=sa.func.now()),
     )
 
-    # ── Useful indexes ─────────────────────────────────────────────────────────
-    op.create_index("ix_book_copies_book_id",           "book_copies",          ["book_id"])
-    op.create_index("ix_book_copies_status",            "book_copies",          ["status"])
-    op.create_index("ix_borrow_transactions_copy_id",   "borrow_transactions",  ["copy_id"])
-    op.create_index("ix_borrow_transactions_member_id", "borrow_transactions",  ["member_id"])
-    op.create_index("ix_borrow_transactions_status",    "borrow_transactions",  ["status"])
-    op.create_index("ix_borrow_transactions_due_date",  "borrow_transactions",  ["due_date"])
-    op.create_index("ix_fines_transaction_id",          "fines",                ["transaction_id"])
-    op.create_index("ix_fines_paid",                    "fines",                ["paid"])
+    # ── Indexes ────────────────────────────────────────────────────────────────
+    op.create_index("ix_book_copies_book_id",           "book_copies",         ["book_id"])
+    op.create_index("ix_book_copies_status",            "book_copies",         ["status"])
+    op.create_index("ix_borrow_transactions_copy_id",   "borrow_transactions", ["copy_id"])
+    op.create_index("ix_borrow_transactions_member_id", "borrow_transactions", ["member_id"])
+    op.create_index("ix_borrow_transactions_status",    "borrow_transactions", ["status"])
+    op.create_index("ix_borrow_transactions_due_date",  "borrow_transactions", ["due_date"])
+    op.create_index("ix_fines_transaction_id",          "fines",               ["transaction_id"])
+    op.create_index("ix_fines_paid",                    "fines",               ["paid"])
 
 
 def downgrade() -> None:
@@ -130,8 +138,7 @@ def downgrade() -> None:
     op.drop_table("book_authors")
     op.drop_table("books")
     op.drop_table("authors")
-    op.execute("DROP TYPE IF EXISTS transaction_status")
-    op.execute("DROP TYPE IF EXISTS book_status")
 
-
-
+    bind = op.get_bind()
+    transaction_status_enum.drop(bind, checkfirst=True)
+    book_status_enum.drop(bind, checkfirst=True)
